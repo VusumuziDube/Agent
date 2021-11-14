@@ -1,4 +1,5 @@
 #include <string.h>
+#include <aJSON.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_NeoPixel.h>
@@ -46,6 +47,9 @@
 #define ECHO   4
 #define TRIG   3
 
+//JSON
+aJsonStream serial_stream(&Serial);
+
 //==============================================
 #define OLED_RESET 9
 #define OLED_SA0   8
@@ -82,7 +86,7 @@ static const unsigned char PROGMEM logo16_glcd_bmp[] =
   0x00, 0x00, 0x00, 0x20, 0x00, 0x60, 0x00, 0xE0, 0x00, 0xE0, 0xEE, 0xCC, 0x7E, 0xCE, 0x7F, 0xDE,
   0x7F, 0xFF, 0x3F, 0xFB, 0x3B, 0x33, 0x11, 0x27, 0x00, 0x0E, 0x00, 0x0E, 0x00, 0x0C, 0x00, 0x00
 };
-
+#define SSD1306_LCDHEIGHT 64
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
@@ -134,6 +138,7 @@ void backward();
 void right();
 void left();
 void stop();
+bool pair();
 
 void readSensors();
 
@@ -182,25 +187,27 @@ void setup() {
 
 
   Serial.println("Agent");
+  while(!pair()){
+    //beep_on;
+    delay(500); // wait to pair with the server
+  }
   
-  do {
-    
-    //doc["link"] = AGENT_ID;
-    //serializeJson(doc, Serial);
-    
+  pack();
+  stop();
+}
+
+bool pair(){
+  //do {
+    readLine();
     Serial.print("{\"LINK\":");
     Serial.print(AGENT_ID);
     //Serial.print(comdata);
     Serial.print(", \"State\":");
     Serial.print(strstr(comdata, "LINK") != 0);
     Serial.println("}"); 
-    readLine();
-    delay(500);
-  } while (strstr(comdata, "LINK") == 0);
-  pack();
-  stop();
+  //} while (strstr(comdata, "LINK") == 0);
+  return strstr(comdata, "LINK");
 }
-
 
 byte CLEAR = 0;
 byte ptr = 0;
@@ -223,15 +230,71 @@ bool readLine() {
   }
   return 0;
 }
+//{"LED1":[255,1,255],"LED2":[255,1,255],"LED4":[255,1,255],"LED3":[0,255,0]}
+void updateLED(aJsonObject* Result, byte* LED, int target){
+  for(int i = 0; i < 3; i++){
+    aJsonObject* temp = aJson.getArrayItem(Result, i);
+    Serial.println(temp->valueint);
+    LED[i] = (byte) temp->valueint;
+  }
+  RGB.setPixelColor(target, RGB.Color(LED[0], LED[1], LED[2]));
+  RGB.show();
+}
 
+int command_ptr = 0;
 int readCommand(){
   if(readLine()){
-    if (strstr(comdata, "pack") != 0) {
+    
+    if (command_ptr = strstr(comdata, "pack") != 0) {
+      return 1;
+    }else{ 
+      aJsonObject* msg = aJson.parse(comdata);
+      aJsonObject* Result = 0;
+      if (Result = aJson.getObjectItem(msg, "Buzzer")) {
+        buzzer = Result->valueint;
+        if(Result->valueint){
+          beep_on; //buzzer = 1;
+        }else{
+          beep_off; //buzzer = 0;
+        }
+      }
+      if (Result = aJson.getObjectItem(msg, "LED1")) {
+        updateLED(Result, LED1, 0);
+      }
+      if (Result = aJson.getObjectItem(msg, "LED2")) {
+        updateLED(Result, LED2, 1);
+      }
+      if (Result = aJson.getObjectItem(msg, "LED3")) {
+        updateLED(Result, LED3, 2);
+      }
+      if (Result = aJson.getObjectItem(msg, "LED4")) {
+        updateLED(Result, LED4, 3);
+      }
+      if (Result = aJson.getObjectItem(msg, "Dir")) {
+        // {"Dir":"W"}
+        switch(Result->valuestring[0]){
+          case 'W': forward();    break;
+          case 'S': backward();   break;
+          case 'A': left();       break;
+          case 'D': right();      break;
+          default:  stop();       break;
+        }
+      }
+      if (Result = aJson.getObjectItem(msg, "Speed")) {
+        if (strcmp(Result->valuestring, "Low") == 0)       //Low
+          Speed = 50;
+        else if (strcmp(Result->valuestring, "Medium") == 0)    //Medium
+          Speed = 150;
+        else if (strcmp(Result->valuestring, "High") == 0)      //High
+          Speed = 250;
+      }
       return 1;
     }
     return 0; 
   }
 }
+
+
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -242,86 +305,15 @@ void loop() {
   pack();
   delay(300);
   Serial.print(comdata);
-  switch(readCommand()){
-    case 1:
-      pack();
-      break;
-    case 2:
-      Serial.println("Forward");
-      break;
-  }
-  
-
- 
-  if (sizeof(comdata) > 0)
-  {
-    const char* command = comdata;
-    if (strcmp(command, "*") == 0) {
-      pack();
-    }
-    else if (strcmp(command, "W") == 0)        //Forward
-    {
-      flag = 0;
-      RGB.setPixelColor(0, 0x000000);
-      RGB.setPixelColor(1, 0x000000);
-      RGB.setPixelColor(2, 0x100000);
-      RGB.setPixelColor(3, 0x000000);
-      RGB.show();
-      forward();
-    }
-    else if (strcmp(command, "S") == 0)  //Backward
-    {
-      flag = 0;
-      RGB.setPixelColor(0, 0x000000);
-      RGB.setPixelColor(1, 0x000000);
-      RGB.setPixelColor(2, 0x001000);
-      RGB.setPixelColor(3, 0x000000);
-      RGB.show();
-      backward();
-    }
-    else if (strcmp(command, "A") == 0)      //Left
-    {
-      flag = 0;
-      RGB.setPixelColor(0, 0x101000);
-      RGB.setPixelColor(1, 0x000000);
-      RGB.setPixelColor(2, 0x000000);
-      RGB.setPixelColor(3, 0x000000);
-      RGB.show();
-      left();
-    }
-    else if (strcmp(command, "D") == 0)     //Right
-    {
-      flag = 0;
-      RGB.setPixelColor(0, 0x000000);
-      RGB.setPixelColor(1, 0x000000);
-      RGB.setPixelColor(2, 0x000000);
-      RGB.setPixelColor(3, 0x000010);
-      RGB.show();
-      right();
-    }
-    else if (strcmp(command, "Q") == 0)      //Stop
-    {
-      flag = 1;
-      RGB.setPixelColor(0, 0x000000);
-      RGB.setPixelColor(1, 0x000000);
-      RGB.setPixelColor(2, 0x000000);
-      RGB.setPixelColor(3, 0x000000);
-      RGB.show();
-      stop();
-    }
-    else if (strcmp(command, "Low") == 0)       //Low
-      Speed = 50;
-    else if (strcmp(command, "Medium") == 0)    //Medium
-      Speed = 150;
-    else if (strcmp(command, "High") == 0)      //High
-      Speed = 250;
+  if(readCommand()){
     ptr = 0;
     comdata[ptr] = '\0';
   }
+    
 
   delay(50);
   //stop();
-  if (millis() - lasttime > 20) {
+  if ((millis() - lasttime > 20) && 0 ) {
     lasttime = millis();
     for (i = 0; i < RGB.numPixels(); i++) {
       RGB.setPixelColor(i, Wheel(((i * 256 / RGB.numPixels()) + j) & 255));
