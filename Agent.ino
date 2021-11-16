@@ -222,7 +222,7 @@ bool readLine() {
     char result = Serial.read();
     comdata[ptr++] = result;
     comdata[ptr] = '\0';
-    Serial.print(result);
+    //Serial.print(result);
     if (result == '\n'){
       CLEAR = 1;
       return 1;
@@ -234,44 +234,57 @@ bool readLine() {
 void updateLED(aJsonObject* Result, byte* LED, int target){
   for(int i = 0; i < 3; i++){
     aJsonObject* temp = aJson.getArrayItem(Result, i);
-    Serial.println(temp->valueint);
+    ////Serial.println(temp->valueint);
     LED[i] = (byte) temp->valueint;
   }
   RGB.setPixelColor(target, RGB.Color(LED[0], LED[1], LED[2]));
   RGB.show();
 }
 
-int command_ptr = 0;
+char* command_ptr = 0;
 int readCommand(){
   if(readLine()){
-    
-    if (command_ptr = strstr(comdata, "pack") != 0) {
+    //Serial.println("Line Read as");
+    //Serial.println(comdata);
+    if ((command_ptr = strstr(comdata, "pack")) != 0) {
       return 1;
-    }else{ 
-      aJsonObject* msg = aJson.parse(comdata);
+    }if ((command_ptr = strstr(comdata, "{")) != 0){ 
+      //Serial.println("Decoding Message");
+      aJsonObject* msg = aJson.parse(command_ptr);
       aJsonObject* Result = 0;
+      //Serial.println("Decoded Message");
       if (Result = aJson.getObjectItem(msg, "Buzzer")) {
+        // {"Buzzer":1}
+        //Serial.println("Buzzer");
         buzzer = Result->valueint;
         if(Result->valueint){
           beep_on; //buzzer = 1;
         }else{
           beep_off; //buzzer = 0;
         }
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "LED1")) {
         updateLED(Result, LED1, 0);
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "LED2")) {
         updateLED(Result, LED2, 1);
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "LED3")) {
         updateLED(Result, LED3, 2);
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "LED4")) {
         updateLED(Result, LED4, 3);
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "Dir")) {
         // {"Dir":"W"}
+        //Serial.print("Direction Change: ");
+        //Serial.println(Result->valuestring); 
+        
         switch(Result->valuestring[0]){
           case 'W': forward();    break;
           case 'S': backward();   break;
@@ -279,6 +292,7 @@ int readCommand(){
           case 'D': right();      break;
           default:  stop();       break;
         }
+        delete Result;
       }
       if (Result = aJson.getObjectItem(msg, "Speed")) {
         if (strcmp(Result->valuestring, "Low") == 0)       //Low
@@ -287,7 +301,9 @@ int readCommand(){
           Speed = 150;
         else if (strcmp(Result->valuestring, "High") == 0)      //High
           Speed = 250;
+          delete Result;
       }
+      delete msg;
       return 1;
     }
     return 0; 
@@ -299,20 +315,28 @@ int readCommand(){
 void loop() {
   // put your main code here, to run repeatedly:
   //readSensors();
-  delay(50);
-  stop();
+  //delay(50);
+  //forward();
+  //
   //readSensors();
-  pack();
-  delay(300);
-  Serial.print(comdata);
+  
+  
+  
+  delay(200);
+  // Serial.println("{\"link\":2}");
+  delay(200);
   if(readCommand()){
+    pack();
     ptr = 0;
     comdata[ptr] = '\0';
   }
-    
-
-  delay(50);
-  //stop();
+  // comdata[ptr] = '\0';
+  //delay(50);
+  if ((millis() - lasttime > 300)) {
+    lasttime = millis();
+    //stop();
+  }
+  
   if ((millis() - lasttime > 20) && 0 ) {
     lasttime = millis();
     for (i = 0; i < RGB.numPixels(); i++) {
@@ -321,6 +345,7 @@ void loop() {
     if (flag)RGB.show();
     if (j++ > 256 * 5) j = 0;
   }
+  //stop();
 }
 
 void addItem(char* key, int value, bool finish){
@@ -396,8 +421,11 @@ int Distance_test()         // Measure the distance
 
 void forward()
 {
+  //Serial.println("Foward Moving");
   analogWrite(PWMA, Speed);
   analogWrite(PWMB, Speed);
+  leftMotorSpeed = Speed;
+  rightMotorSpeed = Speed;
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, HIGH);
   digitalWrite(BIN1, LOW);
@@ -408,6 +436,8 @@ void backward()
 {
   analogWrite(PWMA, Speed);
   analogWrite(PWMB, Speed);
+  leftMotorSpeed = -Speed;
+  rightMotorSpeed = -Speed;
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN1, HIGH);
@@ -418,6 +448,8 @@ void right()
 {
   analogWrite(PWMA, Speed);
   analogWrite(PWMB, Speed);
+  leftMotorSpeed = -Speed;
+  rightMotorSpeed = Speed;
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, HIGH);
   digitalWrite(BIN1, HIGH);
@@ -428,6 +460,8 @@ void left()
 {
   analogWrite(PWMA, Speed);
   analogWrite(PWMB, Speed);
+  leftMotorSpeed = Speed;
+  rightMotorSpeed = -Speed;
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN1, LOW);
@@ -438,6 +472,8 @@ void stop()
 {
   analogWrite(PWMA, 0);
   analogWrite(PWMB, 0);
+  leftMotorSpeed = 0;
+  rightMotorSpeed = 0;
   digitalWrite(AIN1, LOW);
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN1, LOW);
