@@ -137,6 +137,7 @@ void forward();
 void backward();
 void right();
 void left();
+void freeflow();
 void stop();
 bool pair();
 
@@ -252,6 +253,7 @@ int readCommand(){
       //Serial.println("Decoding Message");
       aJsonObject* msg = aJson.parse(command_ptr);
       aJsonObject* Result = 0;
+      char* result=-1;
       //Serial.println("Decoded Message");
       if (Result = aJson.getObjectItem(msg, "Buzzer")) {
         // {"Buzzer":1}
@@ -280,6 +282,12 @@ int readCommand(){
         updateLED(Result, LED4, 3);
         delete Result;
       }
+      if (result = strstr(command_ptr, "\"LeftMotor\":")) {
+        leftMotorSpeed = atoi(result+(sizeof("\"LeftMotor\":")-1));
+      }
+      if (result = strstr(command_ptr, "\"RightMotor\":")) {
+        rightMotorSpeed = atoi(result+(sizeof("\"RightMotor\":")-1));
+      }
       if (Result = aJson.getObjectItem(msg, "Dir")) {
         // {"Dir":"W"}
         //Serial.print("Direction Change: ");
@@ -290,6 +298,7 @@ int readCommand(){
           case 'S': backward();   break;
           case 'A': left();       break;
           case 'D': right();      break;
+          case '&': freeflow();   break;
           default:  stop();       break;
         }
         delete Result;
@@ -317,14 +326,16 @@ void loop() {
   //readSensors();
   //delay(50);
   //forward();
+  
   //
   //readSensors();
   
   
-  
-  delay(200);
+  delay(50);
+  stop(); 
+  delay(350);
   // Serial.println("{\"link\":2}");
-  delay(200);
+  
   if(readCommand()){
     pack();
     ptr = 0;
@@ -332,20 +343,22 @@ void loop() {
   }
   // comdata[ptr] = '\0';
   //delay(50);
-  if ((millis() - lasttime > 300)) {
+  if ((millis() - lasttime) > 1000&&0) {
     lasttime = millis();
-    //stop();
+    stop();
   }
   
-  if ((millis() - lasttime > 20) && 0 ) {
+  if ((millis() - lasttime > 1000) && 0) {
     lasttime = millis();
-    for (i = 0; i < RGB.numPixels(); i++) {
-      RGB.setPixelColor(i, Wheel(((i * 256 / RGB.numPixels()) + j) & 255));
-    }
-    if (flag)RGB.show();
-    if (j++ > 256 * 5) j = 0;
+    //stop();
+//    for (i = 0; i < RGB.numPixels(); i++) {
+//      RGB.setPixelColor(i, Wheel(((i * 256 / RGB.numPixels()) + j) & 255));
+//    }
+//    if (flag)RGB.show();
+//    if (j++ > 256 * 5) j = 0;
   }
-  //stop();
+  freeflow();
+  
 }
 
 void addItem(char* key, int value, bool finish){
@@ -466,6 +479,24 @@ void left()
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN1, LOW);
   digitalWrite(BIN2, HIGH);
+}
+
+void freeflow(){
+  analogWrite(PWMA, abs(leftMotorSpeed));
+  analogWrite(PWMB, abs(rightMotorSpeed*1.13));
+  digitalWrite(AIN1, LOW);
+  digitalWrite(AIN2, LOW);
+  digitalWrite(BIN1, LOW);
+  digitalWrite(BIN2, LOW);
+  if(leftMotorSpeed < 0)
+    digitalWrite(AIN1, HIGH);
+  else if(leftMotorSpeed > 0)
+    digitalWrite(AIN2, HIGH);
+
+  if(rightMotorSpeed < 0)
+    digitalWrite(BIN1, HIGH);
+  else if(rightMotorSpeed > 0)
+    digitalWrite(BIN2, HIGH);
 }
 
 void stop()
